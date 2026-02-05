@@ -16,7 +16,7 @@
 
 
     <worldbody>
-        <body name="base" pos="-1.0 0.0 1.13">
+        <body name="base" pos="-0.15 0.0 0.0">
             <geom mesh="base" mass="0.5"/>
             <body name="link_1" pos="-0.077 0.0 0.0">
                 <joint name="pan_joint" pos="0.15 0.0 0.1" axis="0 0 -1" limited="true" range="-2.78 2.78"/>

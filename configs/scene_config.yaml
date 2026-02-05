@@ -1,0 +1,7 @@
+world_model: 
+robot_model: 
+
+arm:
+  id: 01
+  name: right
+  pos: [0.0, -0.4, 0.9]

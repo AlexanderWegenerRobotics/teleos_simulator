@@ -46,7 +46,7 @@ class SimulationModel:
         self.config = config
         
         # Build composite model from config
-        self.mj_model, self.devices = self._build_model_from_config(config)
+        self.mj_model, self.devices, self.objects = self._build_model_from_config(config)
         self.mj_data = mj.MjData(self.mj_model)
         
         # Initialize device positions
@@ -61,18 +61,15 @@ class SimulationModel:
         self.running = False
         self.dt = self.mj_model.opt.timestep
 
-    def _build_model_from_config(self, config: dict) -> Tuple[mj.MjModel, Dict[str, DeviceInfo]]:
+    def _build_model_from_config(self, config: dict) -> Tuple[mj.MjModel, Dict[str, DeviceInfo], Dict[str, DeviceInfo]]:
         """
         Build MuJoCo model by composing base world + devices + objects.
-        
-        Returns:
-            (compiled_model, device_registry)
         """
         # Load base world as MjSpec (editable)
         world_spec = mj.MjSpec.from_file(config['world_model'])
         world_spec.copy_during_attach = True  # Allow using same model multiple times
         
-        devices = {}
+        devices, objects = {}, {}
         
         # Add devices (robots, sensors)
         for device_cfg in config.get('devices', []):
@@ -94,8 +91,8 @@ class SimulationModel:
             # Create attachment frame in world
             attach_frame = world_spec.worldbody.add_frame(pos=pos, quat=quat)
             
-            # Attach device with unique prefix
-            world_spec.attach(device_spec, frame=attach_frame, prefix=name)
+            # FIX: Attach device with "/" in prefix
+            world_spec.attach(device_spec, frame=attach_frame, prefix=f"{name}/")  # <-- CHANGED
             
             # Store device info
             device_info = DeviceInfo(name, device_type, prefix=f"{name}/")
@@ -122,21 +119,21 @@ class SimulationModel:
             # Create attachment frame in world
             attach_frame = world_spec.worldbody.add_frame(pos=pos, quat=quat)
             
-            # Attach object with unique prefix
-            world_spec.attach(obj_spec, frame=attach_frame, prefix=name)
+            # FIX: Attach object with "/" in prefix
+            world_spec.attach(obj_spec, frame=attach_frame, prefix=f"{name}/")  # <-- CHANGED
             
-            # Store object info (optional - objects usually don't need control)
-            # You can track them in a separate dict if needed for scene management
+            # Store object info
             obj_info = DeviceInfo(name, obj_type, prefix=f"{name}/")
-            devices[name] = obj_info  # Or use separate self.objects dict
+            objects[name] = obj_info 
         
         # Compile final model
         compiled_model = world_spec.compile()
         
         # Extract IDs from compiled model
-        self._extract_device_ids(compiled_model, devices)
+        all_entities = {**devices, **objects}
+        self._extract_device_ids(compiled_model, all_entities)
         
-        return compiled_model, devices
+        return compiled_model, devices, objects  # <-- FIXED return type
     
     def _extract_device_ids(self, model: mj.MjModel, devices: Dict[str, DeviceInfo]):
         """
@@ -171,15 +168,33 @@ class SimulationModel:
                     device_info.body_names.append(body_name)
     
     def _set_initial_positions(self):
-        """Set initial joint positions from config."""
+        """Set initial joint positions and control targets from config."""
         for device_info in self.devices.values():
             if device_info.q0 is not None and len(device_info.q0) > 0:
-                # Set initial positions
-                for i, dof_id in enumerate(device_info.dof_ids):
-                    if i < len(device_info.q0):
-                        self.mj_data.qpos[dof_id] = device_info.q0[i]
+                # Set qpos for all DOFs we have q0 for
+                n_qpos = min(len(device_info.q0), len(device_info.dof_ids))
+                for i in range(n_qpos):
+                    dof_id = device_info.dof_ids[i]
+                    self.mj_data.qpos[dof_id] = device_info.q0[i]
+                
+                # Set ctrl for all actuators we have q0 for
+                n_ctrl = min(len(device_info.q0), len(device_info.actuator_ids))
+                for i in range(n_ctrl):
+                    act_id = device_info.actuator_ids[i]
+                    act_gaintype = self.mj_model.actuator_gaintype[act_id]
+                    
+                    # For position/servo actuators, set target to match q0
+                    if act_gaintype in [mj.mjtGain.mjGAIN_FIXED, mj.mjtGain.mjGAIN_AFFINE]:
+                        self.mj_data.ctrl[act_id] = device_info.q0[i]
+                    else:
+                        # For torque actuators, zero torque
+                        self.mj_data.ctrl[act_id] = 0.0
+                
+                # Set any remaining actuators to zero
+                for i in range(n_ctrl, len(device_info.actuator_ids)):
+                    self.mj_data.ctrl[device_info.actuator_ids[i]] = 0.0
         
-        # Forward kinematics to update derived quantities
+        # Forward kinematics to update all derived quantities
         mj.mj_forward(self.mj_model, self.mj_data)
 
     # ========================
@@ -229,10 +244,6 @@ class SimulationModel:
     def set_control_input(self, device_name: str, values: np.ndarray):
         """
         Set control input (torque/position) for a device.
-        
-        Args:
-            device_name: Name of the device
-            values: Control values (length must match number of actuators)
         """
         device = self.get_device_info(device_name)
         
@@ -247,9 +258,6 @@ class SimulationModel:
     def get_body_pose(self, device_name: str, body_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """
         Get pose of a specific body in a device.
-        
-        Returns:
-            (position, quaternion) where quaternion is [w, x, y, z]
         """
         device = self.get_device_info(device_name)
         full_body_name = f"{device.prefix}{body_name}"
@@ -327,11 +335,14 @@ if __name__ == "__main__":
     # Print device information
     sim.print_device_info()
     
-    # Test: Read initial joint positions
-    print("Initial joint positions:")
     for device_name in sim.get_device_names():
         q = sim.get_joint_positions(device_name)
-        print(f"  {device_name}: {q}")
+        device = sim.get_device_info(device_name)
+        ctrl = sim.mj_data.ctrl[device.actuator_ids]
+        print(f"  {device_name}:")
+        print(f"    qpos: {q}")
+        print(f"    ctrl: {ctrl}")
+        print(f"    q0:   {device.q0}")
     
     # Test: Set some control input
     print("\nSetting control inputs...")

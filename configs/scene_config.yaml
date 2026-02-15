@@ -9,7 +9,13 @@ render_cameras:
     width: 640
     height: 480
   
-  - name: workspace_overview
+  - name: workspace_overview_1
+    attachment: False
+    enabled: True
+    width: 640
+    height: 480
+
+  - name: workspace_overview_2
     attachment: False
     enabled: True
     width: 640
@@ -31,14 +37,14 @@ video_logging:
   enabled: True
   frequency: 20
   cameras:
-    - workspace_overview
+    - workspace_overview_1
     - eye_in_hand
 
 # Streaming configuration
 streaming:
   enabled: False
   streams:
-    - camera: workspace_overview
+    - camera: workspace_overview_1
       backend: gstreamer_udp
       host: 10.0.0.156
       port: 5000
@@ -117,8 +123,14 @@ objects:
 
 # Add and configure cameras such as overall viewpoint
 cameras:
-  - name: workspace_overview
+  - name: workspace_overview_1
     type: fixed
     pos: [0.3, 0, 1.9]
+    quat: [1, 0, 0, 0]
+    fovy: 90
+
+  - name: workspace_overview_2
+    type: fixed
+    pos: [0.3, 0.3, 1.9]
     quat: [1, 0, 0, 0]
     fovy: 90

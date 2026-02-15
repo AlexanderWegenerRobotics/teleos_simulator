@@ -1,0 +1,124 @@
+world_model: assets/mujoco/scenes/world_scene.xml
+control_rate: 200
+render_fps: 30
+
+render_cameras:
+  - name: vr_camera
+    attachment: head
+    enabled: True
+    width: 640
+    height: 480
+  
+  - name: workspace_overview
+    attachment: False
+    enabled: True
+    width: 640
+    height: 480
+
+display:
+  enabled: True
+  # Options: horizontal, vertical, grid
+  layout: grid
+  grid_cols: 2
+  window_name: "Robot Camera Views"
+
+# Logging configuration
+logging:
+  enabled: True
+  frequency: 200
+
+video_logging:
+  enabled: True
+  frequency: 20
+  cameras:
+    - workspace_overview
+    - eye_in_hand
+
+# Streaming configuration
+streaming:
+  enabled: False
+  streams:
+    - camera: workspace_overview
+      backend: gstreamer_udp
+      host: 10.0.0.156
+      port: 5000
+      bitrate: 2000
+      speed_preset: ultrafast
+      tune: zerolatency
+    # Example: add a second stream for eye-in-hand on a different port
+    # - camera: eye_in_hand
+    #   backend: gstreamer_udp
+    #   host: 127.0.0.1
+    #   port: 5001
+
+# Add and configure devices such as robots
+devices:
+  - name: left_arm
+    type: robot
+    enabled: True
+    model_path: assets/mujoco/robots/franka_panda/panda_nohand_torque_eye_in_hand.xml
+    urdf_path: assets/urdf/franka_panda/panda.urdf
+    urdf_ee_name: fr3_link8
+    ctrl_param: configs/control/panda_arm.yaml
+    dof: 7
+    base_pose:
+      position: [0, 0.6, 0.8]
+      orientation: [0.5, -0.5,  0.5, -0.5]
+    q0: [0.0, -0.785398, 0.0, -2.356194, 0.0, 1.570796, 0.785398]
+
+
+  - name: right_arm
+    type: robot
+    enabled: True
+    model_path: assets/mujoco/robots/franka_panda/panda_nohand_torque_eye_in_hand.xml
+    urdf_path: assets/urdf/franka_panda/panda.urdf
+    urdf_ee_name: fr3_link8
+    ctrl_param: configs/control/panda_arm.yaml
+    dof: 7
+    base_pose:
+      position: [0, -0.6, 0.8]
+      orientation: [0.5, 0.5, 0.5, 0.5]
+    q0: [0.0, -0.785398, 0.0, -2.356194, 0.0, 1.570796, 0.785398]
+
+  - name: head
+    type: robot
+    enabled: True
+    model_path: assets/mujoco/robots/pan_tilt_head/pan_tilt_torque.xml
+    ctrl_param: configs/control/head.yaml
+    dof: 2
+    base_pose:
+      position: [0, 0, 1.2]
+      orientation: [0, 0, 0, 1]
+    q0: [1.57079632679, 0.0]
+    
+
+# Add and configure objects such as table, box etc
+objects:
+  - name: table
+    type: static
+    model_path: assets/mujoco/props/table.xml
+    pose:
+      position: [0, 0, 0]
+      orientation: [1, 0, 0, 0]
+
+  - name: target_frame
+    type: visual
+    model_path: assets/mujoco/props/coordinate_frame.xml
+    pose:
+      position: [0, 0, 0.425]
+      orientation: [1, 0, 0, 0]
+
+  - name: box
+    type: visual
+    model_path: assets/mujoco/props/box.xml
+    pose:
+      position: [0.5, 0, 0.425]
+      orientation: [1, 0, 0, 0]
+
+# Add and configure cameras such as overall viewpoint
+cameras:
+  - name: workspace_overview
+    type: fixed
+    pos: [0.3, 0, 1.9]
+    quat: [1, 0, 0, 0]
+    fovy: 90

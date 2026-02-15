@@ -1,0 +1,6 @@
+scene_config: configs/scene_config.yaml
+stream_config: configs/stream_config.yaml 
+headless: False
+
+logging_path: log/
+trial_name: my_trial

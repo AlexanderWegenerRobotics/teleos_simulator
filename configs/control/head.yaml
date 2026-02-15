@@ -1,0 +1,6 @@
+default_mode: "position"
+
+position:
+  kp: [30, 30]
+  kd: [10, 10]
+  tau_max: [30, 30]
